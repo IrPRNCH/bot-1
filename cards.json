@@ -1,0 +1,32 @@
+[
+    {
+        "name": "Slime",
+        "chance": 40,
+        "rarity": "common",
+        "image": "https://i.pinimg.com/736x/3f/2e/e4/3f2ee4851ed5d29165bdfb450855e242.jpg"
+    },
+    {
+        "name": "Knight",
+        "chance": 30,
+        "rarity": "rare",
+        "image": "https://i.pinimg.com/736x/c0/5f/49/c05f49185847d7f47e8f2e4c845b6247.jpg"
+    },
+    {
+        "name": "Phoenix",
+        "chance": 15,
+        "rarity": "epic",
+        "image": "https://i.pinimg.com/736x/5f/bd/53/5fbd537e80cd6d078bfc749ed75c73a9.jpg"
+    },
+    {
+        "name": "Dragon King",
+        "chance": 10,
+        "rarity": "legendary",
+        "image": "https://i.pinimg.com/736x/80/4c/ba/804cba7cae360e6a7d24febca55449cd.jpg"
+    },
+    {
+        "name": "Void God",
+        "chance": 5,
+        "rarity": "mythic",
+        "image": "https://i.pinimg.com/736x/87/69/e8/8769e818b57d855bed85d7f04ac9e2dc.jpg"
+    }
+]

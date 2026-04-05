@@ -1,0 +1,66 @@
+{
+    "471702753467564032": {
+        "money": 100000000000000,
+        "cards": [
+            "Knight",
+            "Knight",
+            "Slime",
+            "Knight",
+            "Slime",
+            "Knight"
+        ],
+        "last_claim": 1775412589,
+        "xp": 40,
+        "level": 1
+    },
+    "337928870323814400": {
+        "money": 60,
+        "cards": [
+            "Knight",
+            "Knight"
+        ],
+        "last_claim": 0,
+        "xp": 20,
+        "level": 1
+    },
+    "414061560583946250": {
+        "money": 9999999999999740,
+        "cards": [
+            "Slime",
+            "Slime",
+            "Slime",
+            "Slime",
+            "Knight",
+            "Slime",
+            "Slime",
+            "Phoenix",
+            "Knight",
+            "Void God",
+            "Slime",
+            "Void God",
+            "Slime",
+            "Slime",
+            "Knight",
+            "Knight",
+            "Void God",
+            "Knight",
+            "Dragon King"
+        ],
+        "last_claim": 1775412723,
+        "xp": 135,
+        "level": 4
+    },
+    "1397877839826784351": {
+        "money": 0,
+        "cards": [
+            "Phoenix",
+            "Slime",
+            "Knight",
+            "Slime",
+            "Dragon King"
+        ],
+        "last_claim": 0,
+        "xp": 95,
+        "level": 1
+    }
+}
