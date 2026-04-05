@@ -834,15 +834,10 @@ async def cardslist(ctx):
     await send_panel(ctx.channel)
 
 
-def read_token():
-    if os.path.exists("token.txt"):
-        with open("token.txt", "r", encoding="utf-8") as f:
-            return f.read().strip()
-    return ""
+import os
 
-
-token = read_token()
+token = os.getenv("DISCORD_TOKEN")
 if not token:
-    raise ValueError("У token.txt немає токена бота.")
+    raise ValueError("❌ Переменная окружения DISCORD_TOKEN не установлена!")
 
 bot.run(token)
