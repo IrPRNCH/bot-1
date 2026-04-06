@@ -9,7 +9,7 @@ import psycopg2
 
 # ================= DB CONNECTION =================
 conn = psycopg2.connect(
-    os.getenv("DATABASE_URL"),
+    os.getenv("postgresql://postgres:cHVbzDGxDtCmmOYjooMAHOeoejfJwoVu@postgres.railway.internal:5432/railway"),
     sslmode="require"
 )
 conn.autocommit = True
