@@ -1,11 +1,10 @@
 import discord
-from discord.ext import commands, tasks
+from discord.ext import commands
 import random
 import json
 import os
 import asyncio
 import time
-from datetime import datetime, timedelta, timezone
 import psycopg2
 
 # ================= DATABASE =================
@@ -39,6 +38,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# ================= CARDS =================
 CARDS_FILE = "cards.json"
 
 def load_cards():
@@ -71,10 +71,7 @@ def get_user(user_id: int):
     user = cur.fetchone()
 
     if not user:
-        cur.execute(
-            "INSERT INTO users (user_id) VALUES (%s) RETURNING *",
-            (user_id,)
-        )
+        cur.execute("INSERT INTO users (user_id) VALUES (%s) RETURNING *", (user_id,))
         user = cur.fetchone()
 
     return {
@@ -100,63 +97,46 @@ def update_user(user):
     ))
 
 def get_user_cards(user_id):
-    cur.execute(
-        "SELECT card_name FROM user_cards WHERE user_id=%s",
-        (user_id,)
-    )
+    cur.execute("SELECT card_name FROM user_cards WHERE user_id=%s", (user_id,))
     return [row[0] for row in cur.fetchall()]
 
 def add_card(user_id, card_name):
-    cur.execute(
-        "INSERT INTO user_cards (user_id, card_name) VALUES (%s, %s)",
-        (user_id, card_name)
-    )
+    cur.execute("INSERT INTO user_cards (user_id, card_name) VALUES (%s, %s)", (user_id, card_name))
 
 # ================= GAME LOGIC =================
-def xp_needed_for_level(level: int) -> int:
-    return 100 + (level - 1) * 50
-
-def make_progress_bar(current: int, maximum: int, size: int = 10) -> str:
-    ratio = current / maximum if maximum > 0 else 0
-    filled = int(ratio * size)
-    return "🟩" * filled + "⬜" * (size - filled)
-
-def add_xp(user: dict, amount: int):
+def add_xp(user, amount):
     user["xp"] += amount
-    level_ups = 0
-
-    while user["xp"] >= xp_needed_for_level(user["level"]):
-        user["xp"] -= xp_needed_for_level(user["level"])
+    while user["xp"] >= 100 + (user["level"] - 1) * 50:
+        user["xp"] -= 100 + (user["level"] - 1) * 50
         user["level"] += 1
-        level_ups += 1
-
-    return level_ups
 
 def get_random_card():
-    if not cards:
-        return None
-    return random.choice(cards)
+    return random.choice(cards) if cards else None
 
-# ================= CASE OPEN =================
-@bot.command()
-async def open(ctx):
-    user = get_user(ctx.author.id)
+
+# ================= CASE SYSTEM =================
+async def open_case_ui(interaction: discord.Interaction):
+    user = get_user(interaction.user.id)
 
     if user["money"] < 20:
-        await ctx.send("❌ Недостатньо грошей")
+        await interaction.response.send_message("❌ Недостатньо грошей", ephemeral=True)
         return
 
-    await ctx.send("🎰 Відкриваємо кейс...")
+    user["money"] -= 20
+    update_user(user)
 
-    msg = await ctx.send("🎲 Крутиться...")
+    await interaction.response.send_message("🎲 Крутиться...", ephemeral=True)
+    msg = await interaction.original_response()
 
     for _ in range(4):
         fake = random.choice(cards)
+
         embed = discord.Embed(
             title="🎲 Крутиться...",
             description=f"{fake['name']} ({fake['rarity']})",
             color=rarity_colors.get(fake["rarity"], 0xFFFFFF)
         )
+
         if fake.get("image"):
             embed.set_image(url=fake["image"])
 
@@ -164,16 +144,12 @@ async def open(ctx):
         await asyncio.sleep(0.8)
 
     card = get_random_card()
+
     if not card:
-        await ctx.send("❌ Помилка")
         return
 
-    user["money"] -= 20
     add_card(user["user_id"], card["name"])
-
-    gained_xp = rarity_xp.get(card["rarity"], 0)
-    level_ups = add_xp(user, gained_xp)
-
+    add_xp(user, rarity_xp.get(card["rarity"], 0))
     update_user(user)
 
     embed = discord.Embed(
@@ -187,88 +163,93 @@ async def open(ctx):
 
     await msg.edit(embed=embed)
 
-# ================= OTHER COMMANDS =================
-@bot.command()
-async def balance(ctx):
-    user = get_user(ctx.author.id)
-    await ctx.send(f"💰 {user['money']} монет")
 
-@bot.command()
-async def inventory(ctx):
-    user = get_user(ctx.author.id)
-    if not user["cards"]:
-        await ctx.send("📭 Порожньо")
-        return
-    await ctx.send("🎒 " + ", ".join(user["cards"][:20]))
+# ================= UI PANEL =================
+class MainPanelView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
 
-@bot.command()
-async def daily(ctx):
-    user = get_user(ctx.author.id)
-    now = int(time.time())
+    @discord.ui.button(label="🎰 Case", style=discord.ButtonStyle.green)
+    async def case(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await open_case_ui(interaction)
 
-    if now - user["last_claim"] < 86400:
-        await ctx.send("⏳ Зачекай")
-        return
+    @discord.ui.button(label="💰 Balance", style=discord.ButtonStyle.blurple)
+    async def balance(self, interaction: discord.Interaction, button: discord.ui.Button):
+        user = get_user(interaction.user.id)
+        await interaction.response.send_message(f"💰 {user['money']}", ephemeral=True)
 
-    user["money"] += 20
-    user["last_claim"] = now
-    update_user(user)
+    @discord.ui.button(label="🎒 Inventory", style=discord.ButtonStyle.gray)
+    async def inventory(self, interaction: discord.Interaction, button: discord.ui.Button):
+        user = get_user(interaction.user.id)
 
-    await ctx.send("💸 +20 монет")
+        if not user["cards"]:
+            await interaction.response.send_message("📭 Empty", ephemeral=True)
+            return
 
-@bot.command()
-async def leaderboard(ctx):
-    cur.execute("""
-        SELECT user_id, level, xp
-        FROM users
-        ORDER BY level DESC, xp DESC
-        LIMIT 10
-    """)
-
-    rows = cur.fetchall()
-
-    if not rows:
-        embed = discord.Embed(
-            title="🏆 Таблиця лідерів",
-            description="❌ Даних ще немає.",
-            color=0xE74C3C
+        await interaction.response.send_message(
+            "🎒 " + ", ".join(user["cards"][:25]),
+            ephemeral=True
         )
-        return await ctx.send(embed=embed)
 
-    medals = {1: "🥇", 2: "🥈", 3: "🥉"}
-    lines = []
+    @discord.ui.button(label="🏆 Leaderboard", style=discord.ButtonStyle.primary)
+    async def leaderboard(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-    top_member = None
+        cur.execute("""
+            SELECT user_id, level, xp
+            FROM users
+            ORDER BY level DESC, xp DESC
+            LIMIT 10
+        """)
 
-    for i, (user_id, level, xp) in enumerate(rows, start=1):
-        member = ctx.guild.get_member(user_id)
+        rows = cur.fetchall()
 
-        if i == 1:
-            top_member = member
+        medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+        text = ""
 
-        name = member.display_name if member else f"User {user_id}"
-        icon = medals.get(i, f"**{i}.**")
+        for i, (user_id, level, xp) in enumerate(rows, start=1):
+            member = interaction.guild.get_member(user_id)
+            name = member.display_name if member else f"User {user_id}"
+            icon = medals.get(i, f"{i}.")
 
-        lines.append(f"{icon} **{name}** — Рівень **{level}** | XP **{xp}**")
+            text += f"{icon} **{name}** — lvl {level} | xp {xp}\n"
 
+        await interaction.response.send_message("🏆 Leaderboard\n\n" + text, ephemeral=True)
+
+    @discord.ui.button(label="🎁 Daily", style=discord.ButtonStyle.red)
+    async def daily(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        user = get_user(interaction.user.id)
+        now = int(time.time())
+
+        if now - user["last_claim"] < 86400:
+            await interaction.response.send_message("⏳ Already claimed", ephemeral=True)
+            return
+
+        user["money"] += 20
+        user["last_claim"] = now
+        update_user(user)
+
+        await interaction.response.send_message("💸 +20 coins", ephemeral=True)
+
+
+# ================= PANEL COMMAND =================
+@bot.command()
+async def panel(ctx):
     embed = discord.Embed(
-        title="🏆 Таблиця лідерів",
-        description="\n".join(lines),
-        color=0xF1C40F
+        title="🎮 GAME PANEL",
+        description="Use buttons below",
+        color=0x2ECC71
     )
 
-    embed.set_footer(text="Топ 10 гравців сервера")
-
-    if top_member:
-        embed.set_thumbnail(url=top_member.display_avatar.url)
-
-    await ctx.send(embed=embed)
+    await ctx.send(embed=embed, view=MainPanelView())
 
 
 # ================= START =================
 @bot.event
 async def on_ready():
     print(f"✅ Logged in as {bot.user}")
+    bot.add_view(MainPanelView())
+
 
 token = os.getenv("DISCORD_TOKEN")
 bot.run(token)
