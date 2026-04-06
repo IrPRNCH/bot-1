@@ -219,21 +219,50 @@ async def daily(ctx):
 @bot.command()
 async def leaderboard(ctx):
     cur.execute("""
-    SELECT user_id, level, xp
-    FROM users
-    ORDER BY level DESC, xp DESC
-    LIMIT 10
+        SELECT user_id, level, xp
+        FROM users
+        ORDER BY level DESC, xp DESC
+        LIMIT 10
     """)
 
     rows = cur.fetchall()
-    text = ""
 
-    for i, row in enumerate(rows, 1):
-        member = ctx.guild.get_member(row[0])
-        name = member.name if member else "User"
-        text += f"{i}. {name} lvl {row[1]}\n"
+    if not rows:
+        embed = discord.Embed(
+            title="🏆 Таблиця лідерів",
+            description="❌ Даних ще немає.",
+            color=0xE74C3C
+        )
+        return await ctx.send(embed=embed)
 
-    await ctx.send("🏆\n" + text)
+    medals = {1: "🥇", 2: "🥈", 3: "🥉"}
+    lines = []
+
+    top_member = None
+
+    for i, (user_id, level, xp) in enumerate(rows, start=1):
+        member = ctx.guild.get_member(user_id)
+
+        if i == 1:
+            top_member = member
+
+        name = member.display_name if member else f"User {user_id}"
+        icon = medals.get(i, f"**{i}.**")
+
+        lines.append(f"{icon} **{name}** — Рівень **{level}** | XP **{xp}**")
+
+    embed = discord.Embed(
+        title="🏆 Таблиця лідерів",
+        description="\n".join(lines),
+        color=0xF1C40F
+    )
+
+    embed.set_footer(text="Топ 10 гравців сервера")
+
+    if top_member:
+        embed.set_thumbnail(url=top_member.display_avatar.url)
+
+    await ctx.send(embed=embed)
 
 # ================= START =================
 @bot.event
