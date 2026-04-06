@@ -264,45 +264,7 @@ async def leaderboard(ctx):
 
     await ctx.send(embed=embed)
 
-########################
 
-async def send_panel(channel):
-    embed = discord.Embed(
-        title="🎰 Панель кейсів",
-        description=(
-            "Натискай кнопки нижче.\n\n"
-            "Уся інформація відкривається особисто для гравця.\n"
-            "Картинка випавшої картки видна тільки тому, хто її вибив."
-        ),
-        color=0x2ECC71
-    )
-    return await channel.send(embed=embed, view=CaseView())
-
-@tasks.loop(minutes=10)
-async def cleanup_panels():
-    now = datetime.now(timezone.utc)
-    limit_time = now - timedelta(hours=1)
-
-    for guild in bot.guilds:
-        for channel in guild.text_channels:
-            try:
-                async for message in channel.history(limit=200):
-                    if message.author != bot.user:
-                        continue
-                    if message.created_at >= limit_time:
-                        continue
-                    if not message.embeds:
-                        continue
-
-                    embed = message.embeds[0]
-                    if embed.title == "🎰 Панель кейсів":
-                        try:
-                            await message.delete()
-                        except Exception:
-                            pass
-            except Exception:
-                pass
-################
 # ================= START =================
 @bot.event
 async def on_ready():
