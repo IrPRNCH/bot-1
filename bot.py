@@ -229,9 +229,15 @@ async def leaderboard(ctx):
     text = ""
 
     for i, row in enumerate(rows, 1):
+        
+    discord.Embed(
+            title="🏆 Таблиця лідерів",
         member = ctx.guild.get_member(row[0])
         name = member.name if member else "User"
         text += f"{i}. {name} lvl {row[1]}\n"
+            color=0xE74C3C
+        )
+
 
     await ctx.send("🏆\n" + text)
 
