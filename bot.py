@@ -1,13 +1,14 @@
 import discord
 from discord.ext import commands, tasks
 import random
+import json
 import os
 import asyncio
 import time
 from datetime import datetime, timedelta, timezone
 import psycopg2
 
-# ================= DB CONNECTION =================
+# ================= DATABASE =================
 conn = psycopg2.connect(
     os.getenv("DATABASE_URL"),
     sslmode="require"
@@ -15,7 +16,6 @@ conn = psycopg2.connect(
 conn.autocommit = True
 cur = conn.cursor()
 
-# ================= CREATE TABLES =================
 cur.execute("""
 CREATE TABLE IF NOT EXISTS users (
     user_id BIGINT PRIMARY KEY,
@@ -34,16 +34,14 @@ CREATE TABLE IF NOT EXISTS user_cards (
 );
 """)
 
-# ================= DISCORD SETUP =================
+# ================= DISCORD =================
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# ================= STATIC DATA =================
 CARDS_FILE = "cards.json"
 
 def load_cards():
-    import json
     if not os.path.exists(CARDS_FILE):
         return []
     with open(CARDS_FILE, "r", encoding="utf-8") as f:
@@ -67,13 +65,16 @@ rarity_xp = {
     "mythic": 150
 }
 
-# ================= DB FUNCTIONS =================
+# ================= DATABASE FUNCTIONS =================
 def get_user(user_id: int):
     cur.execute("SELECT * FROM users WHERE user_id=%s", (user_id,))
     user = cur.fetchone()
 
     if not user:
-        cur.execute("INSERT INTO users (user_id) VALUES (%s) RETURNING *", (user_id,))
+        cur.execute(
+            "INSERT INTO users (user_id) VALUES (%s) RETURNING *",
+            (user_id,)
+        )
         user = cur.fetchone()
 
     return {
@@ -87,9 +88,9 @@ def get_user(user_id: int):
 
 def update_user(user):
     cur.execute("""
-    UPDATE users
-    SET money=%s, xp=%s, level=%s, last_claim=%s
-    WHERE user_id=%s
+        UPDATE users
+        SET money=%s, xp=%s, level=%s, last_claim=%s
+        WHERE user_id=%s
     """, (
         user["money"],
         user["xp"],
@@ -99,7 +100,10 @@ def update_user(user):
     ))
 
 def get_user_cards(user_id):
-    cur.execute("SELECT card_name FROM user_cards WHERE user_id=%s", (user_id,))
+    cur.execute(
+        "SELECT card_name FROM user_cards WHERE user_id=%s",
+        (user_id,)
+    )
     return [row[0] for row in cur.fetchall()]
 
 def add_card(user_id, card_name):
@@ -109,10 +113,15 @@ def add_card(user_id, card_name):
     )
 
 # ================= GAME LOGIC =================
-def xp_needed_for_level(level):
+def xp_needed_for_level(level: int) -> int:
     return 100 + (level - 1) * 50
 
-def add_xp(user, amount):
+def make_progress_bar(current: int, maximum: int, size: int = 10) -> str:
+    ratio = current / maximum if maximum > 0 else 0
+    filled = int(ratio * size)
+    return "🟩" * filled + "⬜" * (size - filled)
+
+def add_xp(user: dict, amount: int):
     user["xp"] += amount
     level_ups = 0
 
@@ -124,20 +133,11 @@ def add_xp(user, amount):
     return level_ups
 
 def get_random_card():
-    return random.choice(cards) if cards else None
+    if not cards:
+        return None
+    return random.choice(cards)
 
-# ================= COMMANDS =================
-@bot.command()
-async def balance(ctx):
-    user = get_user(ctx.author.id)
-
-    embed = discord.Embed(
-        title="💰 Баланс",
-        description=f"Монети: **{user['money']}**\nРівень: **{user['level']}**",
-        color=0x2ECC71
-    )
-    await ctx.send(embed=embed)
-
+# ================= CASE OPEN =================
 @bot.command()
 async def open(ctx):
     user = get_user(ctx.author.id)
@@ -146,53 +146,75 @@ async def open(ctx):
         await ctx.send("❌ Недостатньо грошей")
         return
 
+    await ctx.send("🎰 Відкриваємо кейс...")
+
+    msg = await ctx.send("🎲 Крутиться...")
+
+    for _ in range(4):
+        fake = random.choice(cards)
+        embed = discord.Embed(
+            title="🎲 Крутиться...",
+            description=f"{fake['name']} ({fake['rarity']})",
+            color=rarity_colors.get(fake["rarity"], 0xFFFFFF)
+        )
+        if fake.get("image"):
+            embed.set_image(url=fake["image"])
+
+        await msg.edit(embed=embed)
+        await asyncio.sleep(0.8)
+
     card = get_random_card()
     if not card:
-        await ctx.send("❌ Немає карток")
+        await ctx.send("❌ Помилка")
         return
 
     user["money"] -= 20
     add_card(user["user_id"], card["name"])
 
     gained_xp = rarity_xp.get(card["rarity"], 0)
-    add_xp(user, gained_xp)
+    level_ups = add_xp(user, gained_xp)
 
     update_user(user)
 
     embed = discord.Embed(
-        title="🎉 Ти відкрив кейс!",
-        description=f"🎴 {card['name']}\n🌈 {card['rarity']}",
+        title="🎉 Твоя картка",
+        description=f"{card['name']} ({card['rarity']})",
         color=rarity_colors.get(card["rarity"], 0xFFFFFF)
     )
 
-    await ctx.send(embed=embed)
+    if card.get("image"):
+        embed.set_image(url=card["image"])
 
+    await msg.edit(embed=embed)
+
+# ================= OTHER COMMANDS =================
 @bot.command()
-async def daily(ctx):
+async def balance(ctx):
     user = get_user(ctx.author.id)
-
-    now = int(time.time())
-    if now - user["last_claim"] < 86400:
-        await ctx.send("⏳ Зачекай 24 години")
-        return
-
-    user["money"] += 20
-    user["last_claim"] = now
-
-    update_user(user)
-
-    await ctx.send("💸 +20 монет!")
+    await ctx.send(f"💰 {user['money']} монет")
 
 @bot.command()
 async def inventory(ctx):
     user = get_user(ctx.author.id)
-
     if not user["cards"]:
         await ctx.send("📭 Порожньо")
         return
+    await ctx.send("🎒 " + ", ".join(user["cards"][:20]))
 
-    text = "\n".join(user["cards"][:20])
-    await ctx.send(f"🎒 Інвентар:\n{text}")
+@bot.command()
+async def daily(ctx):
+    user = get_user(ctx.author.id)
+    now = int(time.time())
+
+    if now - user["last_claim"] < 86400:
+        await ctx.send("⏳ Зачекай")
+        return
+
+    user["money"] += 20
+    user["last_claim"] = now
+    update_user(user)
+
+    await ctx.send("💸 +20 монет")
 
 @bot.command()
 async def leaderboard(ctx):
@@ -208,10 +230,10 @@ async def leaderboard(ctx):
 
     for i, row in enumerate(rows, 1):
         member = ctx.guild.get_member(row[0])
-        name = member.name if member else f"User {row[0]}"
-        text += f"{i}. {name} — lvl {row[1]} XP {row[2]}\n"
+        name = member.name if member else "User"
+        text += f"{i}. {name} lvl {row[1]}\n"
 
-    await ctx.send(f"🏆 Лідери:\n{text}")
+    await ctx.send("🏆\n" + text)
 
 # ================= START =================
 @bot.event
