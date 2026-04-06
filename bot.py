@@ -169,21 +169,21 @@ class MainPanelView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="🎰 Case", style=discord.ButtonStyle.green)
+    @discord.ui.button(label="🎰 крутіть казіно", style=discord.ButtonStyle.green)
     async def case(self, interaction: discord.Interaction, button: discord.ui.Button):
         await open_case_ui(interaction)
 
-    @discord.ui.button(label="💰 Balance", style=discord.ButtonStyle.blurple)
+    @discord.ui.button(label="💰 скіки в мене Гармакоїнів", style=discord.ButtonStyle.blurple)
     async def balance(self, interaction: discord.Interaction, button: discord.ui.Button):
         user = get_user(interaction.user.id)
         await interaction.response.send_message(f"💰 {user['money']}", ephemeral=True)
 
-    @discord.ui.button(label="🎒 Inventory", style=discord.ButtonStyle.gray)
+    @discord.ui.button(label="🎒 пакажи маї карточкі", style=discord.ButtonStyle.gray)
     async def inventory(self, interaction: discord.Interaction, button: discord.ui.Button):
         user = get_user(interaction.user.id)
 
         if not user["cards"]:
-            await interaction.response.send_message("📭 Empty", ephemeral=True)
+            await interaction.response.send_message("📭 нєту карточєк", ephemeral=True)
             return
 
         await interaction.response.send_message(
@@ -191,7 +191,7 @@ class MainPanelView(discord.ui.View):
             ephemeral=True
         )
 
-    @discord.ui.button(label="🏆 Leaderboard", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="🏆 хто самий крутий", style=discord.ButtonStyle.primary)
     async def leaderboard(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         cur.execute("""
@@ -215,7 +215,7 @@ class MainPanelView(discord.ui.View):
 
         await interaction.response.send_message("🏆 Leaderboard\n\n" + text, ephemeral=True)
 
-    @discord.ui.button(label="🎁 Daily", style=discord.ButtonStyle.red)
+    @discord.ui.button(label="🎁 забрать дєньгі", style=discord.ButtonStyle.red)
     async def daily(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         user = get_user(interaction.user.id)
@@ -236,8 +236,8 @@ class MainPanelView(discord.ui.View):
 @bot.command()
 async def panel(ctx):
     embed = discord.Embed(
-        title="🎮 GAME PANEL",
-        description="Use buttons below",
+        title="🎮 іді нахкй",
+        description="натискати знизу",
         color=0x2ECC71
     )
 
